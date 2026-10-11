@@ -34,6 +34,30 @@
 
 **已验证可用**：静态颜色（红/绿/蓝）、呼吸、闪烁、彩虹 —— 两条通道都实测通过。
 
+## 自动构建
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) 在 `windows-latest` 上跑，触发条件：
+
+- push 到 `main` / 任何 PR → 编译 + 冒烟测试 + 归档产物
+- push `v*` tag → 额外**自动发布 Release**（上传两个 exe、源码 zip、`SHA256SUMS.txt`）
+- 也可以手动 `workflow_dispatch`
+
+每次运行会依次做：
+
+| 步骤 | 干什么 |
+|---|---|
+| **Guard** | 检查仓库里有没有厂商二进制（`.sys` / ENE/CTI 的 DLL），有就**直接失败** |
+| **Build** | 调 `build.ps1`，用 runner 自带的 `csc.exe` 编译 |
+| **Smoke test** | 跑 `list` / `help`，并**断言两个 exe 的 PE 子系统**分别是 `3`(CUI) 和 `2`(GUI) |
+| **Source archive** | `git archive` 打源码 zip |
+| **Checksums** | 生成 `SHA256SUMS.txt` 并写进 job summary |
+| **Upload** | 归档产物 |
+| **Publish release** | 只在 tag 上跑，用 `gh release create` 发布 |
+
+> **Guard 步骤是有意加的**：本项目的内存灯通道依赖 ENE/CTI 的驱动组件，
+> 而那些是第三方版权物，**不能随本仓库分发**。CI 每次都会检查一遍，
+> 防止以后有人（包括我自己）不小心提交进去。
+
 ## 快速开始
 
 ### 1. 编译（或直接用 Release 里的 exe）
