@@ -32,3 +32,7 @@ AacHal_x64.dll
 Thumbs.db
 .vs/
 .vscode/
+
+# build artifacts committed by accident
+*-source.zip
+SHA256SUMS.txt
