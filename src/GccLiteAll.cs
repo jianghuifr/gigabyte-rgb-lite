@@ -173,6 +173,37 @@ internal static class GccLiteAll
     // ---------------- logging ----------------
 
     private static string _logPath;
+    private static string _statePath;
+
+    /// <summary>Options that consume the following token as their value.</summary>
+    private static bool TakesValue(string a)
+    {
+        if (string.IsNullOrEmpty(a)) return false;
+        a = a.ToLowerInvariant();
+        return a == "--color" || a == "-c" || a == "--leds" ||
+               a == "--speed" || a == "--brightness" || a == "--effect";
+    }
+
+    /// <summary>
+    /// Remembers what WE last set, so "toggle" can flip between on and off.
+    /// It is only our own record - if something else (GCC, a reboot, the controller
+    /// itself) changed the lights, this file is stale by definition.
+    /// </summary>
+    private static string ReadState()
+    {
+        try
+        {
+            if (_statePath != null && System.IO.File.Exists(_statePath))
+                return System.IO.File.ReadAllText(_statePath).Trim().ToLowerInvariant();
+        }
+        catch { }
+        return "off";
+    }
+
+    private static void WriteState(string s)
+    {
+        try { if (_statePath != null) System.IO.File.WriteAllText(_statePath, s); } catch { }
+    }
 
     /// <summary>
     /// Hides our console window, but only when this process is the sole owner of it.
@@ -214,10 +245,28 @@ internal static class GccLiteAll
             string ld = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GccLite");
             System.IO.Directory.CreateDirectory(ld);
             _logPath = System.IO.Path.Combine(ld, "GccLiteAll.log");
+            _statePath = System.IO.Path.Combine(ld, "state.txt");
         }
         catch { }
 
-        string cmd = (args.Length > 0 && !args[0].StartsWith("-")) ? args[0].ToLowerInvariant() : "off";
+        // ---- pass 1: locate the command ----
+        // Options may be written before OR after the command, so first mark every token
+        // that is really the VALUE of an option. The command is then the first remaining
+        // token that is not an option.
+        bool[] isValue = new bool[args.Length];
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (TakesValue(args[i]) && i + 1 < args.Length) { isValue[i + 1] = true; i++; }
+        }
+        int cmdIdx = -1;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (isValue[i] || args[i].StartsWith("-")) continue;
+            cmdIdx = i;
+            break;
+        }
+        string cmd = (cmdIdx >= 0) ? args[cmdIdx].ToLowerInvariant() : "off";
+
         uint color = 0x000000;
         int leds = 8;
         int speed = 5;
@@ -227,9 +276,10 @@ internal static class GccLiteAll
         string effect = "static";
         bool effectGiven = false;
 
-        int start = (args.Length > 0 && !args[0].StartsWith("-")) ? 1 : 0;
-        for (int i = start; i < args.Length; i++)
+        // ---- pass 2: options ----
+        for (int i = 0; i < args.Length; i++)
         {
+            if (i == cmdIdx) continue;
             string a = args[i].ToLowerInvariant();
             if ((a == "--color" || a == "-c") && i + 1 < args.Length) { color = Convert.ToUInt32(args[++i].TrimStart('#'), 16) & 0xFFFFFFu; }
             else if ((a == "--leds") && i + 1 < args.Length) { leds = int.Parse(args[++i], CultureInfo.InvariantCulture); }
@@ -240,6 +290,19 @@ internal static class GccLiteAll
             else if (a == "--smb-only") { doHid = false; }
             else if (a == "--effect" && i + 1 < args.Length) { effect = args[++i].ToLowerInvariant(); effectGiven = true; }
             else if (args[i].Length == 6 && !a.StartsWith("-")) { try { color = Convert.ToUInt32(args[i], 16) & 0xFFFFFFu; } catch { } }
+        }
+
+        // bare effect name right after the command: "effect breath ..."
+        if (!effectGiven && cmdIdx >= 0)
+        {
+            for (int i = cmdIdx + 1; i < args.Length; i++)
+            {
+                if (isValue[i] || args[i].StartsWith("-")) continue;
+                if (args[i].Length == 6 && !TakesValue(args[i])) continue;   // looks like a hex colour
+                effect = args[i].ToLowerInvariant();
+                effectGiven = true;
+                break;
+            }
         }
 
         if (quiet) HideOwnConsole();
@@ -258,23 +321,42 @@ internal static class GccLiteAll
                 return 0;
 
             case "off":
-                return DoAll("static", 0x000000, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2;
+                { int rc = DoAll("static", 0x000000, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2; WriteState("off"); return rc; }
 
             case "on":
-                return DoAll("static", 0xFFFFFF, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2;
+                { int rc = DoAll("static", 0xFFFFFF, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2; WriteState("on"); return rc; }
+
+            case "toggle":
+            case "switch":
+                {
+                    bool wasOn = (ReadState() == "on");
+                    Log("  state was: " + (wasOn ? "on" : "off") + "  ->  " + (wasOn ? "off" : "on"));
+                    if (wasOn)
+                    {
+                        int rc = DoAll("static", 0x000000, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2;
+                        WriteState("off");
+                        return rc;
+                    }
+                    else
+                    {
+                        int rc = DoAll("static", 0xFFFFFF, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2;
+                        WriteState("on");
+                        return rc;
+                    }
+                }
 
             case "color":
                 if (color == 0) color = 0xFFFFFF;
-                return DoAll(effectGiven ? effect : "static", color, brightness, speed, leds, doHid, doSmb) ? 0 : 2;
+                { int rc = DoAll(effectGiven ? effect : "static", color, brightness, speed, leds, doHid, doSmb) ? 0 : 2; WriteState(color == 0 ? "off" : "on"); return rc; }
 
             case "effect":
                 if (!effectGiven) effect = args.Length > 1 ? args[1].ToLowerInvariant() : "cycle";
                 if (color == 0) color = 0xFFFFFF;
-                return DoAll(effect, color, brightness, speed, leds, doHid, doSmb) ? 0 : 2;
+                { int rc = DoAll(effect, color, brightness, speed, leds, doHid, doSmb) ? 0 : 2; WriteState(color == 0 ? "off" : "on"); return rc; }
 
             case "brightness":
                 if (args.Length > 1) brightness = byte.Parse(args[1], CultureInfo.InvariantCulture);
-                return DoAll("static", 0xFFFFFF, brightness, speed, leds, doHid, doSmb) ? 0 : 2;
+                { int rc = DoAll("static", 0xFFFFFF, brightness, speed, leds, doHid, doSmb) ? 0 : 2; WriteState("on"); return rc; }
 
             case "demo":
                 Demo(speed, leds, doHid, doSmb);
@@ -566,6 +648,7 @@ internal static class GccLiteAll
         Console.WriteLine("  on                           开成白色");
         Console.WriteLine("  color RRGGBB                 静态颜色");
         Console.WriteLine("  effect <name>                灯效见 list");
+        Console.WriteLine("  toggle                       开关：在开/关之间切换（记住上次是我们设成什么）");
         Console.WriteLine("  brightness <0-255>           亮度");
         Console.WriteLine("  demo                         依次演示各灯效（每步 8 秒，屏幕上有步号）");
         Console.WriteLine("  list                         列出支持的灯效");
@@ -575,6 +658,9 @@ internal static class GccLiteAll
         Console.WriteLine("       --quiet     隐藏控制台窗口（只有独占控制台时才隐藏，供计划任务用）");
     }
 }
+
+
+
 
 
 

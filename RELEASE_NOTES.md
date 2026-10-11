@@ -1,5 +1,25 @@
 # Release Notes
 
+## v1.0.3 — 开关命令 + 修复参数顺序 bug
+
+### 新增
+
+- **`toggle` 命令**（别名 `switch`）：在开 / 关之间翻转，反复调用就是一个开关。
+  桌面放一个指向 `GccLiteAll.exe toggle` 的快捷方式，双击即用。
+  依据是 `%LOCALAPPDATA%\GccLite\state.txt` —— 只记录"上一次是本工具设成了什么"。
+
+### 修复
+
+- **命令必须是第一个参数的 bug**。`GccLiteAll.exe --hid-only effect wave` 里的
+  `effect wave` 会被静默忽略，整个命令退化成 `off`。
+  现在**选项可以写在命令的前面或后面**，两种写法等价。
+  （README 里那句 `--hid-only effect wave` 之前就是坏的。）
+
+### 变化
+
+- 新增 `state.txt` 记录开关状态；`on` / `off` / `color` / `effect` 都会更新它
+
+---
 ## v1.0.2 — 单一产物
 
 ### 变化
@@ -102,4 +122,5 @@ Release 里另附 `SHA256SUMS.txt`，可自行比对。
 本项目与技嘉（GIGABYTE）、ENE Technology、CTI **无任何关联**，未获授权或认可。
 协议通过观察本机已安装软件的通信逆向得出，属互操作性研究。
 仓库不含任何厂商二进制或反编译产物。直接读写硬件控制器，**使用风险自负**。
+
 

@@ -83,6 +83,7 @@ GccLiteAll <command> [options]
 
   off                    关灯（默认）
   on                     开成白色
+  toggle                 开关：在开 / 关之间翻转（记住上次是我们设成什么）
   color RRGGBB           静态颜色
   effect <name>          灯效（见 list）
   brightness <0-255>     亮度
@@ -103,6 +104,7 @@ GccLiteAll <command> [options]
 ```powershell
 .\GccLiteAll.exe off
 .\GccLiteAll.exe on
+.\GccLiteAll.exe toggle            # 反复调用就是一个开关
 .\GccLiteAll.exe color FF0000
 .\GccLiteAll.exe effect breath --color 00FF00 --speed 3
 .\GccLiteAll.exe effect cycle --speed 10
@@ -125,6 +127,20 @@ movingflash  wave  yoyo  starry  aorusrainbow  coldrainbow  dflash  random
 | `0` | 成功 |
 | `1` | 命令行参数错误 |
 | `2` | **DDR5 通道失败**（厂商 SMBus 组件缺失或驱动不可用；ARGB 通道可能仍然成功）|
+
+### 想做成"双击就用的开关"？
+
+在桌面新建一个快捷方式，目标填：
+
+```
+%LOCALAPPDATA%\GccLite\GccLiteAll.exe
+```
+
+参数填 `toggle`。双击一次翻转一次，就是最直观的开关。
+
+`toggle` 依据的是 `%LOCALAPPDATA%\GccLite\state.txt` —— **它只记录"上一次是本工具设成了什么"**。
+如果灯被别的途径（GCC、重启、控制器自己）改过，这个记录就不准了，此时用
+`on` / `off` / `color` 明确指定即可。
 
 ## 可选：开机自启
 
@@ -339,3 +355,4 @@ DDR5 channel, which is installed by GIGABYTE Control Center. **Those binaries ar
 redistributed here.** The ARGB channel is pure Win32 and has no third-party dependency.
 
 Not affiliated with GIGABYTE, ENE Technology or CTI. MIT licensed.
+

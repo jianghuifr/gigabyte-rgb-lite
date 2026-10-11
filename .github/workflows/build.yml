@@ -85,6 +85,22 @@ jobs:
           if ($rc -ne 0 -and $rc -ne 2) { throw "unexpected DDR5 exit code $rc" }
 
           Write-Host ''
+          Write-Host '--- toggle round trip (state file) ---'
+          $ld = Join-Path $env:LOCALAPPDATA 'GccLite'
+          $sf = Join-Path $ld 'state.txt'
+          Remove-Item $sf -Force -ErrorAction SilentlyContinue
+
+          & $exe --hid-only toggle | Out-Null
+          $s1 = Get-Content $sf -ErrorAction SilentlyContinue
+          Write-Host "toggle #1 -> $s1 (expect on)"
+          if ($s1 -ne 'on') { throw "toggle #1 wrote '$s1', expected 'on'" }
+
+          & $exe --hid-only toggle | Out-Null
+          $s2 = Get-Content $sf -ErrorAction SilentlyContinue
+          Write-Host "toggle #2 -> $s2 (expect off)"
+          if ($s2 -ne 'off') { throw "toggle #2 wrote '$s2', expected 'off'" }
+
+          Write-Host ''
           Write-Host 'smoke test OK'
 
           # 上面的 DDR5 检查故意让最后一个原生命令返回 2（这是预期的失败路径）。
@@ -139,3 +155,4 @@ jobs:
                 dist/GccLiteAll.exe dist/SHA256SUMS.txt
           }
           if ($LASTEXITCODE -ne 0) { throw 'release publish failed' }
+
