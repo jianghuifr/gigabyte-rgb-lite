@@ -87,6 +87,11 @@ jobs:
           Write-Host ''
           Write-Host 'smoke test OK'
 
+          # 上面的 DDR5 检查故意让最后一个原生命令返回 2（这是预期的失败路径）。
+          # pwsh 会把 $LASTEXITCODE 当作进程退出码，所以这里显式收尾。
+          $global:LASTEXITCODE = 0
+          exit 0
+
       - name: Checksums
         shell: pwsh
         run: |
