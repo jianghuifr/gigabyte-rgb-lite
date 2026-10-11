@@ -1,0 +1,7 @@
+LIBRARY GHidApi
+EXPORTS
+    dllexp_ConnectDevice
+    dllexp_DisconnectDevice
+    dllexp_GetConnectedList
+    dllexp_WriteDataToDevice
+    dllexp_ReadDataFromDevice

@@ -1,0 +1,14 @@
+LIBRARY MsIo64_ENE
+EXPORTS
+    InitializeSMB
+    ReadSmbType
+    Read_SMB_Block
+    Read_SMB_Byte
+    Read_SMB_Quick
+    Read_SMB_Word
+    SMB_Process_Call
+    ShutdownSMB
+    Write_SMB_Block
+    Write_SMB_Byte
+    Write_SMB_Word
+

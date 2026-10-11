@@ -1,0 +1,31 @@
+LIBRARY YccDrvv3
+EXPORTS
+    access_io_port
+    CheckNewSMI_State
+    fnYccDrv
+    gb_inp
+    gb_inpd
+    gb_inpw
+    gb_outp
+    gb_outpd
+    gb_outpw
+    MapMem
+    MapMem_Phys_To_Linear
+    MapMem_Phys_To_Linear2
+    MapMemEx
+    MS_ReadMSR
+    MS_WriteMSR
+    nYccDrv
+    ReadMSR
+    ReadMSR64
+    SMICmd
+    SMICmd64
+    UnMapMem
+    UnMapMemEx
+    WriteMSR
+    WriteMSR64
+    YCC_Alloc_Kernel_PhysMem
+    YCC_Free_Kernel_PhysMem
+    YCC_MapMem_Copy_Userbuf_To_Phys
+    YCC_TranslateLinsToPhys
+

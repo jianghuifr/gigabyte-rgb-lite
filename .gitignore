@@ -1,0 +1,34 @@
+# build output
+dist/
+*.exe
+*.pdb
+*.obj
+*.o
+
+# reverse-engineering scratch output
+tools/re/*.log
+tools/re/*.exe
+tools/re/*.dll
+tools/re/*.o
+tools/re/*.txt
+
+# vendor binaries must NEVER be committed
+*.sys
+*.sys.bak
+ene/
+ENE-backup/
+MsIo64_ENE.dll
+CtiIo64.sys
+CtiAIo64.sys
+MsIo64.sys
+gdrv3.sys
+GhidApi.dll
+YccDrvv3.dll
+SMBCtrl.dll
+AacHal_x64.dll
+
+# misc
+*.log
+Thumbs.db
+.vs/
+.vscode/
