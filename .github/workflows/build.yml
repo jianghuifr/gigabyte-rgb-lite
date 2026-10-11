@@ -49,6 +49,7 @@ jobs:
       - name: Smoke test
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Continue'
           $exe = '.\dist\GccLiteAll.exe'
           if (-not (Test-Path $exe)) { throw 'no build output' }
 
@@ -67,11 +68,24 @@ jobs:
           Write-Host "subsystem = $ss (expect 3 = console)"
           if ($ss -ne 3) { throw 'build output is not a console-subsystem binary' }
 
-          # 参数解析路径（runner 上没有目标硬件，只验证不会崩）
-          Write-Host '--- arg parsing ---'
+          Write-Host '--- ARGB only (no target hardware on the runner -> should still exit 0) ---'
           & $exe --hid-only off | Out-Null
-          & $exe --smb-only --no-block off | Out-Null
-          & $exe off --quiet | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "hid-only exit code $LASTEXITCODE, expected 0" }
+
+          Write-Host '--- --quiet (must not kill the runner console) ---'
+          & $exe --hid-only off --quiet | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "quiet exit code $LASTEXITCODE, expected 0" }
+
+          # 内存通道：runner 上没有 ENE/CTI 的厂商组件，应当明确报错并返回 2。
+          # 这正是我们要验证的失败路径。装了组件的机器会返回 0。
+          Write-Host '--- DDR5 only (vendor SMBus component absent -> 2, or 0 if present) ---'
+          & $exe --smb-only off | Out-Null
+          $rc = $LASTEXITCODE
+          Write-Host "exit = $rc"
+          if ($rc -ne 0 -and $rc -ne 2) { throw "unexpected DDR5 exit code $rc" }
+
+          Write-Host ''
+          Write-Host 'smoke test OK'
 
       - name: Checksums
         shell: pwsh
