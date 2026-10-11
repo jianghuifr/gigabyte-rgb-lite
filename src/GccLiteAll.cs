@@ -230,28 +230,23 @@ internal static class GccLiteAll
                 return 0;
 
             case "off":
-                DoAll("static", 0x000000, 0xFF, speed, leds, doHid, doSmb);
-                return 0;
+                return DoAll("static", 0x000000, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2;
 
             case "on":
-                DoAll("static", 0xFFFFFF, 0xFF, speed, leds, doHid, doSmb);
-                return 0;
+                return DoAll("static", 0xFFFFFF, 0xFF, speed, leds, doHid, doSmb) ? 0 : 2;
 
             case "color":
                 if (color == 0) color = 0xFFFFFF;
-                DoAll(effectGiven ? effect : "static", color, brightness, speed, leds, doHid, doSmb);
-                return 0;
+                return DoAll(effectGiven ? effect : "static", color, brightness, speed, leds, doHid, doSmb) ? 0 : 2;
 
             case "effect":
                 if (!effectGiven) effect = args.Length > 1 ? args[1].ToLowerInvariant() : "cycle";
                 if (color == 0) color = 0xFFFFFF;
-                DoAll(effect, color, brightness, speed, leds, doHid, doSmb);
-                return 0;
+                return DoAll(effect, color, brightness, speed, leds, doHid, doSmb) ? 0 : 2;
 
             case "brightness":
                 if (args.Length > 1) brightness = byte.Parse(args[1], CultureInfo.InvariantCulture);
-                DoAll("static", 0xFFFFFF, brightness, speed, leds, doHid, doSmb);
-                return 0;
+                return DoAll("static", 0xFFFFFF, brightness, speed, leds, doHid, doSmb) ? 0 : 2;
 
             case "demo":
                 Demo(speed, leds, doHid, doSmb);
@@ -262,12 +257,15 @@ internal static class GccLiteAll
         }
     }
 
-    private static void DoAll(string effect, uint color, byte brightness, int speed, int leds, bool doHid, bool doSmb)
+    /// <summary>Runs the requested channels. Returns false if the DDR5 channel was requested but failed.</summary>
+    private static bool DoAll(string effect, uint color, byte brightness, int speed, int leds, bool doHid, bool doSmb)
     {
         Log("  effect=" + effect + " colour=0x" + color.ToString("X6") + " bri=" + brightness + " speed=" + speed + " leds=" + leds);
         if (doHid) DoHid(effect, color, brightness, speed);
-        if (doSmb) DoSmb(effect, color, leds);
+        bool smbOk = true;
+        if (doSmb) smbOk = DoSmb(effect, color, leds);
         Log("  done");
+        return smbOk;
     }
 
     private static void Demo(int speed, int leds, bool doHid, bool doSmb)
@@ -436,7 +434,7 @@ internal static class GccLiteAll
 
     // ---------------- DDR5 DIMMs (ENE over SMBus) ----------------
 
-    private static void DoSmb(string effect, uint color, int leds)
+    private static bool DoSmb(string effect, uint color, int leds)
     {
         Log("[2] DDR5 DIMM RGB (ENE MsIo64) effect=" + effect);
 
@@ -444,12 +442,20 @@ internal static class GccLiteAll
 
         string dir = null;
         foreach (string d in EneDirs()) { if (System.IO.File.Exists(System.IO.Path.Combine(d, "MsIo64_ENE.dll"))) { dir = d; break; } }
-        if (dir == null) { Log("    MsIo64_ENE.dll not found"); return; }
+        if (dir == null)
+        {
+            Log("    MsIo64_ENE.dll not found - the DDR5 channel needs the ENE/CTI SMBus component.");
+            Log("    It ships with GIGABYTE Control Center. If you removed it, copy that folder to");
+            Log(@"      %LOCALAPPDATA%\GccLite\ene\   (see tools\restore-vendor-drivers.ps1)");
+            Log("    The ARGB/header channel is unaffected - use --hid-only to skip this one.");
+            return false;
+        }
         SetDllDirectory(dir);
         IntPtr hMod = LoadLibraryW(System.IO.Path.Combine(dir, "MsIo64_ENE.dll"));
         if (hMod == IntPtr.Zero)
         {
-            Log("    LoadLibrary failed: " + Marshal.GetLastWin32Error()); return;
+            Log("    LoadLibrary failed: " + Marshal.GetLastWin32Error());
+            return false;
         }
         Log("    loaded MsIo64_ENE.dll from: " + dir);
 
@@ -494,8 +500,14 @@ internal static class GccLiteAll
         }
         ShutdownSMB();
         Log("    SMBus calls ok=" + okCalls + " failed=" + badCalls);
+        if (okCalls == 0)
+        {
+            Log("    All SMBus writes were rejected - the CTIIO driver is probably missing.");
+            Log("    Check: sc query CTIIO   (see tools\\restore-vendor-drivers.ps1)");
+        }
         Log("    4 DIMMs: mode=" + spec.Mode + " b2=" + spec.B2 + " b3=" + spec.B3 +
             " params=" + spec.Params.Length + " colour=0x" + color.ToString("X6"));
+        return okCalls > 0;
     }
 
     /// <summary>One colour+commit cycle, exactly as GCC structures it.</summary>
@@ -534,6 +546,8 @@ internal static class GccLiteAll
         Console.WriteLine("       --hid-only  只控 ARGB/风扇    --smb-only  只控 DDR5 内存");
     }
 }
+
+
 
 
 

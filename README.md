@@ -3,9 +3,19 @@
 [![build](https://github.com/jianghuifr/gigabyte-rgb-lite/actions/workflows/build.yml/badge.svg)](https://github.com/jianghuifr/gigabyte-rgb-lite/actions/workflows/build.yml)
 
 > 针对 **技嘉 Z790M AORUS ELITE D5（小雕）** 逆向出来的独立灯光控制工具。
-> 开机自动关灯，不需要 GCC 常驻、不需要 GCC 自启、不需要 GCC 主程序。
+> 不需要 GCC 常驻、不需要 GCC 自启、不需要 GCC 主程序，也**不需要管理员权限**。
 
 ---
+
+## 它做什么
+
+| 灯 | 控制通道 | 能力 |
+|---|---|---|
+| **ARGB 排针 / 风扇灯 / 灯带** | ITE IT5701 / IT5702 · **USB HID** | 开关、任意颜色、亮度、6 种动态灯效 |
+| **DDR5 内存条灯** | ENE 控制器 · **SMBus 0x70–0x73** | 开关、任意颜色、**16 种灯效** |
+| 主板板载灯 | —— | 本型号无独立板载 LED（布局里的 LED_C1 / Chipset Accent / LED_C2 三个 zone 没有实体灯珠）|
+
+**已实测**：静态颜色（红/绿/蓝）、呼吸、闪烁、彩虹 —— 两条通道都通过。
 
 ## 背景
 
@@ -20,47 +30,23 @@
 | | GCC | GccLite |
 |---|---|---|
 | 体积 | 数百 MB 安装 + 常驻服务 | **单个 18 KB 的 exe** |
-| 开机行为 | 常驻后台、托盘图标、多个服务进程 | 登录后跑一次，**立刻退出** |
-| 依赖 | .NET / WPF / 一大堆私有 DLL | .NET Framework（系统自带） |
-| 启动耗时 | 约 25 秒 | **约 1 秒** |
-
-## 它做什么
-
-| 灯 | 控制通道 | 能力 |
-|---|---|---|
-| **ARGB 排针 / 风扇灯 / 灯带** | ITE IT5701 / IT5702 · **USB HID** | 开关、任意颜色、亮度、6 种动态灯效 |
-| **DDR5 内存条灯** | ENE 控制器 · **SMBus 0x70–0x73** | 开关、任意颜色、**16 种灯效** |
-| 主板板载灯 | —— | 本型号无独立板载 LED（布局里的 LED_C1 / Chipset Accent / LED_C2 三个 zone 没有实体灯珠）|
-
-**已验证可用**：静态颜色（红/绿/蓝）、呼吸、闪烁、彩虹 —— 两条通道都实测通过。
-
-## 自动构建
-
-[`.github/workflows/build.yml`](.github/workflows/build.yml) 在 `windows-latest` 上跑，触发条件：
-
-- push 到 `main` / 任何 PR → 编译 + 冒烟测试 + 归档产物
-- push `v*` tag → 额外**自动发布 Release**（上传两个 exe、源码 zip、`SHA256SUMS.txt`）
-- 也可以手动 `workflow_dispatch`
-
-每次运行会依次做：
-
-| 步骤 | 干什么 |
-|---|---|
-| **Guard** | 检查仓库里有没有厂商二进制（`.sys` / ENE/CTI 的 DLL），有就**直接失败** |
-| **Build** | 调 `build.ps1`，用 runner 自带的 `csc.exe` 编译 |
-| **Smoke test** | 跑 `list` / `help`，并**断言两个 exe 的 PE 子系统**分别是 `3`(CUI) 和 `2`(GUI) |
-| **Source archive** | `git archive` 打源码 zip |
-| **Checksums** | 生成 `SHA256SUMS.txt` 并写进 job summary |
-| **Upload** | 归档产物 |
-| **Publish release** | 只在 tag 上跑，用 `gh release create` 发布 |
-
-> **Guard 步骤是有意加的**：本项目的内存灯通道依赖 ENE/CTI 的驱动组件，
-> 而那些是第三方版权物，**不能随本仓库分发**。CI 每次都会检查一遍，
-> 防止以后有人（包括我自己）不小心提交进去。
+| 运行方式 | 常驻后台、托盘图标、多个服务进程 | 跑一次，**立刻退出** |
+| 依赖 | .NET / WPF / 一大堆私有 DLL | .NET Framework（系统自带）|
+| 耗时 | 约 25 秒 | **约 1 秒** |
 
 ## 快速开始
 
-### 1. 编译（或直接用 Release 里的 exe）
+### 直接用 Release 里的 exe
+
+下载 `GccLiteAll.exe` 双击，或者在命令行里跑：
+
+```powershell
+.\GccLiteAll.exe off              # 关掉所有灯
+```
+
+就这一步，没有安装过程，没有注册表改动，没有常驻进程。
+
+### 从源码编译
 
 ```powershell
 .\build.ps1
@@ -77,9 +63,9 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | 文件 | PE 子系统 | 行为 | 用途 |
 |---|---|---|---|
 | `GccLiteAll.exe` | `WINDOWS_CUI` | 带控制台窗口，能看输出 | **手动敲命令**、看 `list` / `demo` |
-| `GccLiteHidden.exe` | `WINDOWS_GUI` | **完全不弹窗** | **计划任务**（登录时自动跑）|
+| `GccLiteHidden.exe` | `WINDOWS_GUI` | **完全不弹窗** | 放进计划任务/启动项做自动化 |
 
-之所以要分两个：开机任务每次登录都要跑一遍，用控制台版的话
+之所以要分两个：如果你把它挂到登录时自动跑，用控制台版的话
 **每次登录都会有个黑窗口闪一下**。GUI 子系统版根本不分配控制台，
 静默跑完就退出——代价是它的输出只能进日志文件
 （`%LOCALAPPDATA%\GccLite\GccLiteAll.log`），看不到屏上。
@@ -91,56 +77,7 @@ csc /target:exe    /out:GccLiteAll.exe    src\GccLiteAll.cs   # 控制台版
 csc /target:winexe /out:GccLiteHidden.exe src\GccLiteAll.cs   # 无窗口版
 ```
 
-> 只想要关灯的话，**下载 `GccLiteAll.exe` 双击运行**就够了；
-> `GccLiteHidden.exe` 是给 `install\Install-GccLite.ps1` 注册的计划任务用的。
-
-### 2. 安装开机自启
-
-```powershell
-# 提权运行
-powershell -ExecutionPolicy Bypass -File .\install\Install-GccLite.ps1
-```
-
-它会：
-
-1. 把 exe 复制到 `%LOCALAPPDATA%\GccLite\`
-2. 注册登录触发任务 `GccLiteAll`（延迟 15 秒、最高权限、**直接调用 exe**）
-3. 注册 34 个按需触发的灯效任务 `GccLiteFx-*`
-4. **禁用技嘉自己的 `GCC` 自启任务**
-5. 生成 34 个双击启动器到 `%LOCALAPPDATA%\GccLite\Effects\`
-
-> 计划任务**直接调用 exe**，不走 `powershell.exe -WindowStyle Hidden`——
-> 因为部分安全软件（如火绒）的 HIPS 规则会拦截隐藏 PowerShell 的计划任务。
-
-### 3. 用
-
-```powershell
-$exe = "$env:LOCALAPPDATA\GccLite\GccLiteAll.exe"
-
-& $exe off                                   # 全关（默认）
-& $exe on                                    # 全开成白色
-& $exe color FF0000                          # 任意颜色 0xRRGGBB
-& $exe effect breath                         # 灯效
-& $exe effect cycle --speed 10               # 灯效 + 速度
-& $exe brightness 40                         # 亮度 0-255
-& $exe --hid-only effect wave                # 只控 ARGB / 风扇
-& $exe --smb-only off                        # 只控 DDR5 内存
-& $exe list                                  # 列出全部灯效
-```
-
-### 4. 双击切换灯效（推荐日常用）
-
-`Effects\` 里 34 个 `.cmd`，**双击即生效、不弹 UAC、效果一直保持**：
-
-- **基础 14 个**：开 / 关 / 静态色 / 呼吸 / 闪烁 / 循环 / 波浪 / 随机 / 慢速 / 快速 / 低亮度 / 单通道测试
-- **颜色 10 个**：红 橙 黄 绿 青 蓝 紫 品红 白 暖白
-- **ENE 专属 10 个**（内存通道独有）：彩虹 / 呼吸彩虹 / 彗星 / 彩虹彗星 / 流动闪烁 / 辉光往复 / 星空 / 双闪 / AORUS 彩虹 / 冷彩虹
-
-原理：每个 `.cmd` 只是触发一个预先注册好的最高权限计划任务。
-**触发自己名下的任务不需要管理员权限**，所以不弹 UAC；而任务本身带最高权限，
-内存灯需要的端口 I/O 才能用。
-
-## 命令行参考
+## 用法
 
 ```
 GccLiteAll <command> [options]
@@ -161,12 +98,84 @@ GccLiteAll <command> [options]
   --no-block        只发寄存器序列（诊断用）
 ```
 
+例：
+
+```powershell
+.\GccLiteAll.exe off
+.\GccLiteAll.exe on
+.\GccLiteAll.exe color FF0000
+.\GccLiteAll.exe effect breath --color 00FF00 --speed 3
+.\GccLiteAll.exe effect cycle --speed 10
+.\GccLiteAll.exe brightness 40
+.\GccLiteAll.exe --hid-only effect wave
+.\GccLiteAll.exe --smb-only off
+```
+
 支持的灯效名：
 
 ```
 static  breath  flash  cycle  rainbow  breathrainbow  comet  cometrainbow
 movingflash  wave  yoyo  starry  aorusrainbow  coldrainbow  dflash  random
 ```
+
+### 退出码
+
+| 码 | 含义 |
+|---|---|
+| `0` | 成功 |
+| `1` | 命令行参数错误 |
+| `2` | **DDR5 通道失败**（厂商 SMBus 组件缺失或驱动不可用；ARGB 通道可能仍然成功）|
+
+## 可选：开机自启
+
+**这一步不属于本项目** —— 工具本身不做任何自启配置，也不碰你的计划任务。
+需要的话自己加一条即可，用无窗口版：
+
+```powershell
+$exe = "$PWD\GccLiteHidden.exe"
+Register-ScheduledTask -TaskName 'GccLiteOff' `
+    -Action  (New-ScheduledTaskAction -Execute $exe -Argument 'off') `
+    -Trigger (New-ScheduledTaskTrigger -AtLogOn) `
+    -Force
+```
+
+不需要管理员权限，也不需要 `-RunLevel Highest`。
+
+删掉：
+
+```powershell
+Unregister-ScheduledTask -TaskName 'GccLiteOff' -Confirm:$false
+```
+
+> 如果你的杀毒软件有「隐藏执行 PowerShell」之类的 HIPS 规则，
+> 注意**直接调用 exe**（如上）没问题，但别把任务写成
+> `powershell.exe -WindowStyle Hidden -Command ...` —— 那种会被拦。
+
+## 自动构建
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) 在 `windows-latest` 上跑：
+
+| 触发 | 行为 |
+|---|---|
+| push `main` / PR | 编译 + 冒烟测试 + 归档产物 |
+| push `v*` tag | 额外**自动发布 Release**（两个 exe、源码 zip、`SHA256SUMS.txt`）|
+| 手动 | `workflow_dispatch` |
+
+每次运行依次做：
+
+| 步骤 | 干什么 |
+|---|---|
+| **Guard** | 检查仓库里有没有厂商二进制（`.sys` / ENE/CTI 的 DLL），有就**直接失败** |
+| **Build** | 调 `build.ps1`，用 runner 自带的 `csc.exe` 编译 |
+| **Smoke test** | 跑 `list` / `help`，并**断言两个 exe 的 PE 子系统**分别是 `3`(CUI) 和 `2`(GUI) |
+| **Source archive** | `git archive` 打源码 zip |
+| **Checksums** | 生成 `SHA256SUMS.txt` 并写进 job summary |
+| **Upload** | 归档产物 |
+| **Publish release** | 只在 tag 上跑，用 `gh release create` 发布 |
+
+> **Guard 步骤是有意加的**：本项目的内存灯通道依赖 ENE/CTI 的驱动组件，
+> 而那些是第三方版权物，**不能随本仓库分发**。CI 每次都会检查一遍，
+> 防止以后有人（包括我自己）不小心提交进去。
 
 ## 技术原理
 
@@ -238,25 +247,35 @@ zone 表（抓包所得）：
 2. 内存的**动效颜色不跟 `--color` 走**——ENE 控制器的动效用它自己的颜色通道
    （发"绿色呼吸"会看到蓝色呼吸）。静态模式的颜色是准的。
 
-更详细的抓包记录和逆向过程见 [`docs/REVERSE-ENGINEERING.md`](docs/REVERSE-ENGINEERING.md)。
+踩过的坑、代理 DLL 的写法、objdump 反推原型的方法，都在
+[`docs/REVERSE-ENGINEERING.md`](docs/REVERSE-ENGINEERING.md)。
 
 ## 依赖
 
-| 部件 | 位置 / 设备名 | 谁提供的 |
-|---|---|---|
-| ARGB 通道 | 无 —— 纯 `setupapi.dll` + `hid.dll` | Windows |
-| `MsIo64_ENE.dll` | `%LOCALAPPDATA%\GccLite\ene\` | **CTI**（"CtiIo for ENE"）|
-| `CtiIo64.sys` + `CTIIO` 服务 | `C:\Windows\system32\drivers\`，设备 `\\.\CTIIO` | **CTI** 内核驱动 |
+| 部件 | 位置 / 设备名 | 谁提供的 | 需要管理员？ |
+|---|---|---|---|
+| ARGB 通道 | 无 —— 纯 `setupapi.dll` + `hid.dll` | Windows | **否** |
+| `MsIo64_ENE.dll` | `%LOCALAPPDATA%\GccLite\ene\` 或 ENE 安装目录 | **CTI**（"CtiIo for ENE"）| **否** |
+| `CtiIo64.sys` + `CTIIO` 服务 | `C:\Windows\system32\drivers\`，设备 `\\.\CTIIO` | **CTI** 内核驱动 | **否** |
 
 **本工具源码里没有任何 GCC 路径，GCC 主程序一个字节都没用到。**
+实测**不需要管理员权限**（CTIIO 的设备对象允许普通用户访问）。
 
-⚠️ 但内存那一路需要上面那两个**第三方组件**（技嘉的安装程序会一并装上）。
-本仓库**不包含、也不再分发**这些厂商二进制文件。如果你机器上没有它们，
-内存灯通道会不可用（ARGB 通道不受影响，纯 Win32 实现）。
+`MsIo64_ENE.dll` 的导入表只有 `KERNEL32 / USER32 / ADVAPI32`，不依赖任何 GCC 组件。
+工具会按下面的顺序找它，用第一个存在的：
+
+```
+%LOCALAPPDATA%\GccLite\ene\
+C:\Program Files\ENE\Aac_ENE_DRAM_RGB_AIO\x64\
+C:\Program Files\ENE\Aac_ENE RGB HAL\x64\
+```
+
+⚠️ **本仓库不包含、也不再分发**任何厂商二进制文件。如果你机器上没有它们，
+内存灯通道会不可用并返回退出码 `2`（ARGB 通道不受影响，纯 Win32 实现）。
 
 ### 能卸载 GCC 吗？
 
-可以。`install\Restore-ENE-Driver.ps1` 是为此准备的恢复脚本，
+可以。`tools\restore-vendor-drivers.ps1` 是为此准备的恢复脚本，
 会依次检查 `CTIIO` / `CTIAIO` / `MSIO` 三个驱动的文件与服务、以及 ENE DLL 副本，缺哪个补哪个。
 
 **这套恢复流程做过完整的拆解演练**：
@@ -272,7 +291,7 @@ zone 表（抓包所得）：
 
 ## 已知限制
 
-- **睡眠唤醒后**控制器会复位，可能需要再运行一次（可以加一个唤醒触发器）。
+- **睡眠唤醒后**控制器会复位，可能需要再运行一次。
 - 内存的 `--leds` 默认 8（每根内存 8 颗灯珠），换内存条时可能需要调整。
 - 内存的动效颜色不跟 `--color` 走（见上）。
 - 主板板载灯无法控制——本型号没有独立的板载 LED。
@@ -297,7 +316,7 @@ MIT —— 见 [LICENSE](LICENSE)。
 ## English summary
 
 **GccLite** replaces GIGABYTE Control Center for RGB control on a Gigabyte Z790M AORUS ELITE D5,
-in a single ~18 KB executable.
+in a single ~18 KB executable. No resident process, no installer, and **no administrator rights**.
 
 **Why**: GCC must autostart and stay resident just to write a few dozen bytes to the RGB
 controllers at boot. GccLite does the same job in about one second and exits.

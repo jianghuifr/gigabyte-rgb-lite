@@ -15,7 +15,7 @@
 # removed. It is checked here only because GCC installs it too.
 #
 # Run elevated AFTER uninstalling GCC if the DIMM lights stop responding:
-#   powershell -ExecutionPolicy Bypass -File Restore-ENE-Driver.ps1
+#   powershell -ExecutionPolicy Bypass -File tools\restore-vendor-drivers.ps1
 
 $ErrorActionPreference = 'Continue'
 $ld = Join-Path $env:LOCALAPPDATA 'GccLite'
@@ -94,3 +94,4 @@ if (Test-Path $exe) {
 } else {
     Say ("  (tool not found at " + $exe + ")")
 }
+

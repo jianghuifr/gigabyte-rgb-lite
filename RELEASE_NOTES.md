@@ -1,17 +1,39 @@
 # Release Notes
 
+## v1.0.1 — 去掉自启安装部分
+
+**本工具不再包含任何「安装 / 注册计划任务 / 禁用技嘉自启」的脚本。**
+那属于用户自己的环境配置，不属于工具本身。
+
+### 变化
+
+- **移除** `install\` 下的安装脚本和 `effects\` 下的双击启动器
+  （它们依赖那套"最高权限计划任务 + 免 UAC"机制，已一并去掉）
+- **新增退出码 `2`**：DDR5 通道失败时明确报错，并打印可操作的排查提示
+  （缺哪个 DLL、检查哪个驱动、怎么只跑 ARGB 通道）
+- **确认并写明：整个工具不需要管理员权限。**
+  实测不提权下 `SMBus calls ok=4 failed=0` —— 之前那套"必须最高权限"的假设是错的
+- 驱动修复脚本移到 `tools\restore-vendor-drivers.ps1`，
+  仍可用于「卸载 GCC 后内存灯不亮」的恢复场景
+
+### 想开机自启？
+
+自己加一条计划任务即可，README 里有现成的复制粘贴片段，用无窗口版 `GccLiteHidden.exe`。
+不需要管理员权限，也不需要 `-RunLevel Highest`。
+
+---
+
 ## v1.0.0 — 首个版本
 
-用一个小工具取代 GIGABYTE Control Center 控制灯光。**下载 `GccLiteAll.exe`，
-双击即用**（关闭所有灯光）；想常驻化管理用 `install\Install-GccLite.ps1`。
+用一个小工具取代 GIGABYTE Control Center 控制灯光。
 
 ### 亮点
 
-- **单个 18 KB 的 exe**，无依赖、无安装、无后台进程
-- 开机自动关灯：登录后跑一次，**约 1 秒**，然后退出
+- **单个 18 KB 的 exe**，无安装、无注册表改动、无后台进程
+- 跑一次约 **1 秒**然后退出，对比 GCC 的约 25 秒
 - 同时覆盖 **ARGB 排针/风扇灯** 和 **DDR5 内存灯**两条完全独立的通道
-- **34 个双击启动器**切换灯效和颜色，不弹 UAC、效果持续保持
-- 不需要 GCC 主程序运行；可以把技嘉的自启任务永久禁用
+- 两条通道共 22 种灯效，全部命令行可控
+- 不需要 GCC 主程序运行
 
 ### 支持的能力
 
@@ -32,7 +54,7 @@
 - 内存：4 根 DDR5（ENE RGB 控制器，SMBus 0x70–0x73）
 - 系统：Windows 11 + .NET Framework 4.x
 
-其他 IT5702 / IT5701 的技嘉主板大概率可用（协议通用），但未验证。
+其他 IT5702 / IT5701 的技嘉主板大概率可用（协议是通用的），但未验证。
 
 ### 已知限制
 
@@ -44,45 +66,24 @@
 - 内存通道需要厂商组件 `MsIo64_ENE.dll` + `CtiIo64.sys`（由技嘉安装程序安装）；
   **本仓库不分发这些文件**
 
-### 安装
-
-**方式 A：只要关灯（最简）**
-
-下载 `GccLiteAll.exe`，双击运行即可立刻关掉所有灯。
-把它放进「启动」文件夹或计划任务就能开机自动关灯。
-
-**方式 B：完整安装（推荐）**
+### 用法
 
 ```powershell
-git clone https://github.com/<you>/gcc-lite.git
-cd gcc-lite
-powershell -ExecutionPolicy Bypass -File .\install\Install-GccLite.ps1   # 提权
-```
-
-会自动编译、注册开机任务、生成 34 个双击启动器、并禁用技嘉的 GCC 自启。
-
-### 回滚
-
-```powershell
-Unregister-ScheduledTask -TaskName 'GccLiteAll' -Confirm:$false
-Get-ScheduledTask -TaskName 'GccLiteFx-*' | Unregister-ScheduledTask -Confirm:$false
-Enable-ScheduledTask -TaskName 'GCC'
+.\GccLiteAll.exe off              # 关掉所有灯
+.\GccLiteAll.exe color FF0000     # 指定颜色
+.\GccLiteAll.exe effect breath    # 灯效
+.\GccLiteAll.exe list             # 列出全部灯效
 ```
 
 ### 校验
-
-```
-文件    : GccLiteAll.exe
-大小    : 17920 字节
-编译    : csc.exe (x64, /optimize+)
-来源    : src\GccLiteAll.cs  —— 单文件 C#，可直接审阅后自行编译
-```
 
 不放心直接跑 exe 的话，用 `build.ps1` 从源码自己编译一个：
 
 ```powershell
 .\build.ps1        # 只用 Windows 自带的 csc.exe
 ```
+
+Release 里另附 `SHA256SUMS.txt`，可自行比对。
 
 ### 免责声明
 
