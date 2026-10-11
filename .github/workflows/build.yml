@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ---------------------------------------------------------------
       # 许可卫生：仓库里绝不允许出现厂商二进制
@@ -96,7 +96,7 @@ jobs:
           '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: gcc-lite-${{ github.sha }}
           path: dist/*
@@ -128,3 +128,4 @@ jobs:
                 (Get-ChildItem dist/gcc-lite-*-source.zip).FullName dist/SHA256SUMS.txt
           }
           if ($LASTEXITCODE -ne 0) { throw "release publish failed" }
+
