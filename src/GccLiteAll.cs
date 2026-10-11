@@ -71,6 +71,12 @@ internal static class GccLiteAll
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr CreateFileW(string f, uint a, uint s, IntPtr sa, uint c, uint fl, IntPtr t);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr h);
 
+    // --- console self-hide (see --quiet) ---
+    [DllImport("kernel32.dll")] private static extern IntPtr GetConsoleWindow();
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern uint GetConsoleProcessList(uint[] list, uint count);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    private const int SW_HIDE = 0;
+
     // ---------------- ENE DDR5 DIMM (SMBus) ----------------
 
     // Preference order for the ENE SMBus layer. Our own copy comes first so that
@@ -168,6 +174,24 @@ internal static class GccLiteAll
 
     private static string _logPath;
 
+    /// <summary>
+    /// Hides our console window, but only when this process is the sole owner of it.
+    /// If we were launched from an existing terminal we inherited that console and must
+    /// NOT hide it - that would take the user's shell window down with us.
+    /// </summary>
+    private static void HideOwnConsole()
+    {
+        try
+        {
+            IntPtr hwnd = GetConsoleWindow();
+            if (hwnd == IntPtr.Zero) return;
+            uint[] pids = new uint[16];
+            uint n = GetConsoleProcessList(pids, (uint)pids.Length);
+            if (n == 1) ShowWindow(hwnd, SW_HIDE);   // ours alone -> safe to hide
+        }
+        catch { }
+    }
+
     private static void Log(string s)
     {
         string line = string.Format("{0:yyyy-MM-dd HH:mm:ss}  {1}", DateTime.Now, s);
@@ -199,6 +223,7 @@ internal static class GccLiteAll
         int speed = 5;
         byte brightness = 0xFF;
         bool doHid = true, doSmb = true;
+        bool quiet = false;
         string effect = "static";
         bool effectGiven = false;
 
@@ -210,11 +235,14 @@ internal static class GccLiteAll
             else if ((a == "--leds") && i + 1 < args.Length) { leds = int.Parse(args[++i], CultureInfo.InvariantCulture); }
             else if ((a == "--speed") && i + 1 < args.Length) { speed = int.Parse(args[++i], CultureInfo.InvariantCulture); }
             else if ((a == "--brightness") && i + 1 < args.Length) { brightness = byte.Parse(args[++i], CultureInfo.InvariantCulture); }
+            else if (a == "--quiet" || a == "--hide-console") { quiet = true; }
             else if (a == "--hid-only") { doSmb = false; }
             else if (a == "--smb-only") { doHid = false; }
             else if (a == "--effect" && i + 1 < args.Length) { effect = args[++i].ToLowerInvariant(); effectGiven = true; }
             else if (args[i].Length == 6 && !a.StartsWith("-")) { try { color = Convert.ToUInt32(args[i], 16) & 0xFFFFFFu; } catch { } }
         }
+
+        if (quiet) HideOwnConsole();
 
         Log("=== GccLiteAll " + string.Join(" ", args) + " ===");
 
@@ -544,8 +572,10 @@ internal static class GccLiteAll
         Console.WriteLine();
         Console.WriteLine("选项： --color RRGGBB  --leds N  --speed 1-10  --brightness 0-255");
         Console.WriteLine("       --hid-only  只控 ARGB/风扇    --smb-only  只控 DDR5 内存");
+        Console.WriteLine("       --quiet     隐藏控制台窗口（只有独占控制台时才隐藏，供计划任务用）");
     }
 }
+
 
 
 

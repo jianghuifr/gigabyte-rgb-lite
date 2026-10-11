@@ -58,24 +58,23 @@
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 ```
 
-产物是**两个 exe，同一份源码**，只有编译目标不同：
-
-| 文件 | PE 子系统 | 行为 | 用途 |
-|---|---|---|---|
-| `GccLiteAll.exe` | `WINDOWS_CUI` | 带控制台窗口，能看输出 | **手动敲命令**、看 `list` / `demo` |
-| `GccLiteHidden.exe` | `WINDOWS_GUI` | **完全不弹窗** | 放进计划任务/启动项做自动化 |
-
-之所以要分两个：如果你把它挂到登录时自动跑，用控制台版的话
-**每次登录都会有个黑窗口闪一下**。GUI 子系统版根本不分配控制台，
-静默跑完就退出——代价是它的输出只能进日志文件
-（`%LOCALAPPDATA%\GccLite\GccLiteAll.log`），看不到屏上。
-
-两个文件字节差异约 34%，但源码一个字都没差：
+产物只有一个：**`dist\GccLiteAll.exe`**。
 
 ```powershell
-csc /target:exe    /out:GccLiteAll.exe    src\GccLiteAll.cs   # 控制台版
-csc /target:winexe /out:GccLiteHidden.exe src\GccLiteAll.cs   # 无窗口版
+csc /target:exe /platform:x64 /optimize+ /out:dist\GccLiteAll.exe src\GccLiteAll.cs
 ```
+
+它是**控制台子系统**程序——因为命令行是本工具的主要接口，
+`list`、`demo`、出错提示都需要能看到输出。
+
+如果你要把它挂到登录时自动跑，加 `--quiet` 就不会闪窗口：
+
+```powershell
+.\GccLiteAll.exe off --quiet
+```
+
+`--quiet` 只在**本进程独占控制台**时才隐藏窗口。
+如果你是在已有的终端里跑，它不会去关你的终端（会自动跳过）。
 
 ## 用法
 
@@ -96,6 +95,7 @@ GccLiteAll <command> [options]
   --hid-only        只控 ARGB / 风扇
   --smb-only        只控 DDR5 内存
   --no-block        只发寄存器序列（诊断用）
+  --quiet           隐藏控制台窗口（仅在独占控制台时生效，供计划任务用）
 ```
 
 例：
@@ -129,12 +129,12 @@ movingflash  wave  yoyo  starry  aorusrainbow  coldrainbow  dflash  random
 ## 可选：开机自启
 
 **这一步不属于本项目** —— 工具本身不做任何自启配置，也不碰你的计划任务。
-需要的话自己加一条即可，用无窗口版：
+需要的话自己加一条即可，记得加 `--quiet` 免得闪窗口：
 
 ```powershell
-$exe = "$PWD\GccLiteHidden.exe"
+$exe = "$PWD\GccLiteAll.exe"
 Register-ScheduledTask -TaskName 'GccLiteOff' `
-    -Action  (New-ScheduledTaskAction -Execute $exe -Argument 'off') `
+    -Action  (New-ScheduledTaskAction -Execute $exe -Argument 'off --quiet') `
     -Trigger (New-ScheduledTaskTrigger -AtLogOn) `
     -Force
 ```
@@ -158,21 +158,23 @@ Unregister-ScheduledTask -TaskName 'GccLiteOff' -Confirm:$false
 | 触发 | 行为 |
 |---|---|
 | push `main` / PR | 编译 + 冒烟测试 + 归档产物 |
-| push `v*` tag | 额外**自动发布 Release**（两个 exe、源码 zip、`SHA256SUMS.txt`）|
+| push `v*` tag | 额外**自动发布 Release**（exe + `SHA256SUMS.txt`）|
 | 手动 | `workflow_dispatch` |
 
 每次运行依次做：
 
 | 步骤 | 干什么 |
 |---|---|
-| **Guard** | 检查仓库里有没有厂商二进制（`.sys` / ENE/CTI 的 DLL），有就**直接失败** |
+| **Guard** | 检查仓库里有没有被提交的二进制（`.exe` / `.sys` / 厂商 DLL），有就**直接失败** |
 | **Build** | 调 `build.ps1`，用 runner 自带的 `csc.exe` 编译 |
-| **Smoke test** | 跑 `list` / `help`，并**断言两个 exe 的 PE 子系统**分别是 `3`(CUI) 和 `2`(GUI) |
-| **Source archive** | `git archive` 打源码 zip |
+| **Smoke test** | 跑 `list` / `help` / 参数解析，并**断言 PE 子系统是 `3`**（控制台程序）|
 | **Checksums** | 生成 `SHA256SUMS.txt` 并写进 job summary |
 | **Upload** | 归档产物 |
 | **Publish release** | 只在 tag 上跑，用 `gh release create` 发布 |
 
+> 源码包不用自己打——GitHub 会给每个 tag 自动生成 "Source code (zip/tar.gz)"。
+> Release 里只挂 exe 和校验和。
+>
 > **Guard 步骤是有意加的**：本项目的内存灯通道依赖 ENE/CTI 的驱动组件，
 > 而那些是第三方版权物，**不能随本仓库分发**。CI 每次都会检查一遍，
 > 防止以后有人（包括我自己）不小心提交进去。
