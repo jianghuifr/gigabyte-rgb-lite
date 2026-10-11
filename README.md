@@ -1,5 +1,7 @@
 # GccLite — 用一个 18 KB 的小工具取代 GIGABYTE Control Center 控制灯光
 
+[![build](https://github.com/jianghuifr/gigabyte-rgb-lite/actions/workflows/build.yml/badge.svg)](https://github.com/jianghuifr/gigabyte-rgb-lite/actions/workflows/build.yml)
+
 > 针对 **技嘉 Z790M AORUS ELITE D5（小雕）** 逆向出来的独立灯光控制工具。
 > 开机自动关灯，不需要 GCC 常驻、不需要 GCC 自启、不需要 GCC 主程序。
 
@@ -45,6 +47,28 @@
 ```
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 ```
+
+产物是**两个 exe，同一份源码**，只有编译目标不同：
+
+| 文件 | PE 子系统 | 行为 | 用途 |
+|---|---|---|---|
+| `GccLiteAll.exe` | `WINDOWS_CUI` | 带控制台窗口，能看输出 | **手动敲命令**、看 `list` / `demo` |
+| `GccLiteHidden.exe` | `WINDOWS_GUI` | **完全不弹窗** | **计划任务**（登录时自动跑）|
+
+之所以要分两个：开机任务每次登录都要跑一遍，用控制台版的话
+**每次登录都会有个黑窗口闪一下**。GUI 子系统版根本不分配控制台，
+静默跑完就退出——代价是它的输出只能进日志文件
+（`%LOCALAPPDATA%\GccLite\GccLiteAll.log`），看不到屏上。
+
+两个文件字节差异约 34%，但源码一个字都没差：
+
+```powershell
+csc /target:exe    /out:GccLiteAll.exe    src\GccLiteAll.cs   # 控制台版
+csc /target:winexe /out:GccLiteHidden.exe src\GccLiteAll.cs   # 无窗口版
+```
+
+> 只想要关灯的话，**下载 `GccLiteAll.exe` 双击运行**就够了；
+> `GccLiteHidden.exe` 是给 `install\Install-GccLite.ps1` 注册的计划任务用的。
 
 ### 2. 安装开机自启
 

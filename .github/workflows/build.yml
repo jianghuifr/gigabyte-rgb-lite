@@ -1,0 +1,130 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------
+      # 许可卫生：仓库里绝不允许出现厂商二进制
+      # （MsIo64_ENE.dll / CtiIo64.sys / AacHal_x64.dll 等属于 ENE / CTI）
+      # ---------------------------------------------------------------
+      - name: Guard - no vendor binaries tracked
+        shell: pwsh
+        run: |
+          $bad = git ls-files | Where-Object {
+                    $_ -match '\.(sys|dll)$' -or
+                    $_ -match 'AacHal|InstDrv|MsIo64_ENE|MsIo32|CtiIo|CtiAIo|gdrv3|GhidApi|YccDrvv3|SMBCtrl'
+                 }
+          if ($bad) {
+            Write-Host '::error::Vendor binaries must not be committed:'
+            $bad | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          }
+          Write-Host 'OK - no vendor binaries tracked.'
+          Write-Host ("tracked files: " + (git ls-files | Measure-Object).Count)
+
+      # ---------------------------------------------------------------
+      # 用 Windows 自带的 csc.exe 编译，不用任何 SDK
+      # ---------------------------------------------------------------
+      - name: Build
+        shell: pwsh
+        run: |
+          .\build.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          Write-Host '--- list ---'
+          .\dist\GccLiteAll.exe list
+          if ($LASTEXITCODE -ne 0) { throw 'GccLiteAll.exe list failed' }
+
+          Write-Host '--- help ---'
+          .\dist\GccLiteAll.exe help | Select-Object -First 6
+          if ($LASTEXITCODE -ne 0) { throw 'GccLiteAll.exe help failed' }
+
+          # 两个 exe 必须是同一个源码、不同子系统
+          function Get-Subsystem([string]$p) {
+            $b = [System.IO.File]::ReadAllBytes($p)
+            $pe = [BitConverter]::ToInt32($b, 0x3C)
+            [BitConverter]::ToUInt16($b, $pe + 24 + 68)
+          }
+          $cui = Get-Subsystem '.\dist\GccLiteAll.exe'
+          $gui = Get-Subsystem '.\dist\GccLiteHidden.exe'
+          Write-Host "GccLiteAll.exe    subsystem = $cui (expect 3 = console)"
+          Write-Host "GccLiteHidden.exe subsystem = $gui (expect 2 = windows gui)"
+          if ($cui -ne 3) { throw 'console build is not a console subsystem binary' }
+          if ($gui -ne 2) { throw 'hidden build is not a GUI subsystem binary' }
+
+      - name: Source archive
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF_NAME } else { 'snapshot' }
+          git archive --format=zip -o "dist/gcc-lite-$tag-source.zip" HEAD
+          Get-ChildItem dist | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem dist -File | Sort-Object Name | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "{0}  {1}" -f $h, $_.Name
+          }
+          $lines | Set-Content dist/SHA256SUMS.txt -Encoding ascii
+          $lines | ForEach-Object { Write-Host $_ }
+
+          # 写进 job summary，方便直接看
+          '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '## 构建产物' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcc-lite-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+
+      # ---------------------------------------------------------------
+      # 打 tag 时自动发 Release
+      # ---------------------------------------------------------------
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          Write-Host "publishing $tag ..."
+
+          # 已经存在就只补传资产，避免重复运行时报错
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "release $tag already exists - uploading (clobber) assets"
+            gh release upload $tag dist/GccLiteAll.exe dist/GccLiteHidden.exe `
+                (Get-ChildItem dist/gcc-lite-*-source.zip).FullName dist/SHA256SUMS.txt --clobber
+          } else {
+            gh release create $tag `
+                --title "GccLite $tag" `
+                --notes-file RELEASE_NOTES.md `
+                dist/GccLiteAll.exe dist/GccLiteHidden.exe `
+                (Get-ChildItem dist/gcc-lite-*-source.zip).FullName dist/SHA256SUMS.txt
+          }
+          if ($LASTEXITCODE -ne 0) { throw "release publish failed" }
